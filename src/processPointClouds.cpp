@@ -28,12 +28,52 @@ typename pcl::PointCloud<PointT>::Ptr ProcessPointClouds<PointT>::FilterCloud(ty
     auto startTime = std::chrono::steady_clock::now();
 
     // TODO:: Fill in the function to do voxel grid point reduction and region based filtering
+    typename pcl::PointCloud<PointT>::Ptr cloud_voxel_filtered (new pcl::PointCloud<PointT>);
+    typename pcl::PointCloud<PointT>::Ptr cloud_roi_filtered (new pcl::PointCloud<PointT>);
+    
+    pcl::VoxelGrid<PointT> sor;
+    sor.setInputCloud(cloud);
+    sor.setLeafSize(filterRes, filterRes, filterRes);
+    sor.filter(*cloud_voxel_filtered);
+
+    pcl::CropBox<PointT> region(true);
+    region.setMin(minPoint);
+    region.setMax(maxPoint);
+    region.setInputCloud(cloud_voxel_filtered);
+    region.filter(*cloud_roi_filtered);
+
+    std::vector<int> indices;
+    pcl::CropBox<PointT> roof(true);
+    roof.setMin(Eigen::Vector4f (-1.5, -1.7, -1, 1));
+    roof.setMax(Eigen::Vector4f (2.6, 1.7, -0.4, 1));
+    roof.setInputCloud(cloud_roi_filtered);
+    roof.filter(indices);
+
+    pcl::PointIndices::Ptr inliers {new pcl::PointIndices};
+    for (int point : indices)
+        inliers->indices.push_back(point);
+    
+    pcl::ExtractIndices<PointT> extract;
+    extract.setInputCloud(cloud_roi_filtered);
+    extract.setIndices (inliers);
+    extract.setNegative(true);
+    extract.filter (*cloud_roi_filtered);
+
+    // pcl::StatisticalMultiscaleInterestRegionExtraction<typename PointT> region_extraction;
+    // std::vector<float> scale_vector;
+    // region_extraction.setInputCloud(cloud_voxel_filtered);
+    // for (size_t scales = 0; scales < 7; ++scales)
+    // {
+    //     PCL_INFO ("%f ", base_scale_aux);
+    //     scale_vector.push_back (base_scale_aux);
+    //     base_scale_aux *= 1.6f;
+    // }
 
     auto endTime = std::chrono::steady_clock::now();
     auto elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
     std::cout << "filtering took " << elapsedTime.count() << " milliseconds" << std::endl;
 
-    return cloud;
+    return cloud_roi_filtered;
 
 }
 
